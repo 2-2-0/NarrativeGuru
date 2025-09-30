@@ -1,10 +1,10 @@
 # narrative-guru.py, a vibe coded open source tool for writers and creators
+# version 1.1.0 - september 2025 (Updated for 'Clothing' category, Horizontal UI, and Renaming)
 #
 # designed and vibe coded by 220 and Goggle's Gemini AI
 # along with millions of coders around the world who provided for this code
 #
 # GPL v3.0 license - give credit for the idea and application where it's due
-# version 1.0.0 - september 2025
 #
 # 2-2-0.online
 # github.com/220nh
@@ -18,23 +18,27 @@ import shutil
 import platform
 import subprocess
 
+# NEW: Application Constants
+VERSION = "1.1.0"
+
 class NarrativeGuruApp:
     def __init__(self, root):
         """Initializes the main application window and its components."""
         self.root = root
-        self.root.title("NarrativeGuru")
+        # MODIFIED: Use the constant in the title for consistency
+        self.root.title(f"NarrativeGuru v{VERSION}") 
         
         # Determine the OS for platform-specific clipboard commands
         self.os_type = platform.system()
         
         # Set initial size, centered
-        window_width = 800
-        window_height = 828
+        window_width = 1100 
+        window_height = 800 
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         x = (screen_width - window_width) // 2
         y = (screen_height - window_height) // 2
-        self.root.geometry(f'{window_width}x{window_height}+{x}+{y}')
+        self.root.geometry(f'{window_width}x{window_height}+{x}+{y}') 
 
         # Define application state variables
         self.current_project = None
@@ -55,12 +59,18 @@ class NarrativeGuruApp:
     def show_welcome_screen(self):
         """Builds and displays the Welcome Screen."""
         self.clear_frame()
+        # Reset geometry for welcome screen 
+        self.root.geometry("800x828") 
 
         # Welcome screen title
         welcome_frame = tk.Frame(self.root, padx=20, pady=20)
         welcome_frame.pack(expand=True, fill="both")
 
-        tk.Label(welcome_frame, text="NarrativeGuru", font=("Helvetica", 24, "bold")).pack(pady=20)
+        tk.Label(welcome_frame, text="NarrativeGuru", font=("Helvetica", 24, "bold")).pack(pady=5)
+        
+        # NEW: Version label added just below the title
+        tk.Label(welcome_frame, text=f"v{VERSION}", font=("Helvetica", 10)).pack(pady=0)
+        
         tk.Label(welcome_frame, text="by 220 (2-2-0.online)", font=("Helvetica", 12, "bold")).pack(pady=20)
 
         # Existing projects list
@@ -97,8 +107,7 @@ class NarrativeGuruApp:
 
     def show_project_context_menu(self, event):
         """
-        Displays a right-click context menu for deleting a project.
-        This function is updated to ensure the item under the cursor is selected.
+        Displays a right-click context menu for renaming and deleting a project.
         """
         try:
             # Get the index of the item that was right-clicked
@@ -113,10 +122,14 @@ class NarrativeGuruApp:
             # Handle cases where the click is not on an item in the listbox
             return
         
+        project_name = self.projects_listbox.get(index)
+        
         context_menu = tk.Menu(self.root, tearoff=0)
+        # NEW: Add rename option
+        context_menu.add_command(label="Rename", command=lambda: self.show_rename_modal(project_name, "project")) 
         context_menu.add_command(label="Delete", command=lambda: self.delete_project(event))
         context_menu.post(event.x_root, event.y_root)
-
+        
     def delete_project(self, event):
         """Deletes the selected project folder after confirmation."""
         if self.projects_listbox.curselection():
@@ -131,6 +144,100 @@ class NarrativeGuruApp:
                     self.populate_projects_list()
                 except OSError as e:
                     messagebox.showerror("Error", f"Failed to delete project: {e}")
+
+    def show_rename_modal(self, old_name, item_type, resource_type=None):
+        """Displays a modal window for renaming a project or resource."""
+        self.rename_window = tk.Toplevel(self.root)
+        self.rename_window.title(f"Rename {item_type.capitalize()}")
+        self.rename_window.grab_set()
+        
+        frame = tk.Frame(self.rename_window, padx=20, pady=20)
+        frame.pack()
+
+        # Determine the label text
+        if item_type == "project":
+            label_text = "Enter new project name:"
+        else: # character, clothing, location, prop
+            singular_type = "piece of clothing" if resource_type == "clothing" else resource_type.rstrip('s')
+            label_text = f"Enter new {singular_type} name:"
+            
+        tk.Label(frame, text=label_text).pack(pady=5)
+        
+        self.new_name_entry = tk.Entry(frame, width=30)
+        self.new_name_entry.insert(0, old_name)
+        self.new_name_entry.pack(pady=5)
+        
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+        
+        # Connect to the appropriate renaming function
+        if item_type == "project":
+            command = lambda: self.rename_project(old_name, self.new_name_entry.get())
+        else:
+            command = lambda: self.rename_resource(old_name, self.new_name_entry.get(), resource_type)
+
+        tk.Button(button_frame, text="Rename", command=command).pack(side="left", padx=5)
+        tk.Button(button_frame, text="Cancel", command=self.rename_window.destroy).pack(side="left", padx=5)
+        
+    def rename_project(self, old_name, new_name):
+        """Handles the renaming of a project folder."""
+        new_name = new_name.strip()
+        if not new_name:
+            messagebox.showerror("Error", "New project name cannot be empty.")
+            return
+
+        old_dir = os.path.join(self.project_path, old_name)
+        new_dir = os.path.join(self.project_path, new_name)
+
+        if os.path.exists(new_dir):
+            messagebox.showerror("Error", f"A project named '{new_name}' already exists.")
+            return
+            
+        try:
+            os.rename(old_dir, new_dir)
+            
+            # Update current project if it was the one being renamed
+            if self.current_project == old_name:
+                self.current_project = new_name
+                self.show_project_screen() # Reload the project screen with the new name
+            else:
+                self.show_welcome_screen() # Reload the welcome screen
+                
+            self.rename_window.destroy()
+            messagebox.showinfo("Success", f"Project '{old_name}' renamed to '{new_name}'.")
+        except OSError as e:
+            messagebox.showerror("Error", f"Failed to rename project: {e}")
+
+    def rename_resource(self, old_name, new_name, resource_type):
+        """Handles the renaming of a resource (file)."""
+        new_name = new_name.strip()
+        if not new_name:
+            messagebox.showerror("Error", "New resource name cannot be empty.")
+            return
+
+        old_file = os.path.join(self.project_path, self.current_project, resource_type, f"{old_name}.json")
+        new_file = os.path.join(self.project_path, self.current_project, resource_type, f"{new_name}.json")
+
+        singular_type = "piece of clothing" if resource_type == "clothing" else resource_type.rstrip('s')
+
+        if os.path.exists(new_file):
+            messagebox.showerror("Error", f"A {singular_type} named '{new_name}' already exists.")
+            return
+            
+        try:
+            os.rename(old_file, new_file)
+            
+            # Clear preview/selection if the selected resource was renamed
+            if hasattr(self, 'selected_resource_path') and self.selected_resource_path == old_file:
+                del self.selected_resource_path
+                self.preview_text.delete("1.0", tk.END)
+                
+            self.populate_resource_lists()
+            self.rename_window.destroy()
+            messagebox.showinfo("Success", f"{singular_type.capitalize()} '{old_name}' renamed to '{new_name}'.")
+        except OSError as e:
+            messagebox.showerror("Error", f"Failed to rename resource: {e}")
+
 
     def show_new_project_window(self):
         """Displays the New Project Window popup."""
@@ -166,6 +273,7 @@ class NarrativeGuruApp:
             os.makedirs(os.path.join(project_dir, "characters"))
             os.makedirs(os.path.join(project_dir, "locations"))
             os.makedirs(os.path.join(project_dir, "props"))
+            os.makedirs(os.path.join(project_dir, "clothing"))
             messagebox.showinfo("Success", f"Project '{project_name}' created.")
             self.new_project_window.destroy()
             self.current_project = project_name
@@ -174,9 +282,9 @@ class NarrativeGuruApp:
             messagebox.showerror("Error", f"Failed to create project: {e}")
 
     def show_project_screen(self):
-        """Builds and displays the main Project Screen workspace."""
+        """Builds and displays the main Project Screen workspace in a two-column resource layout."""
         self.clear_frame()
-        self.root.geometry("800x828")
+        self.root.geometry("1100x800") 
 
         # Top area: Brand and project info
         top_frame = tk.Frame(self.root, padx=10, pady=10)
@@ -187,17 +295,30 @@ class NarrativeGuruApp:
         tk.Label(top_frame, text=f"Project: {self.current_project}", font=("Helvetica", 14)).pack(side="left")
         tk.Button(top_frame, text="Back to Projects", command=self.show_welcome_screen).pack(side="right")
 
-        # Bottom area: Left and right panes
+        # Bottom area: Left (Resources) and Right (Preview/Remix) panes
         main_panes = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, sashrelief=tk.SUNKEN)
         main_panes.pack(expand=True, fill="both", padx=10, pady=10)
 
         # Left pane: Resource Catalogs
         left_pane = tk.Frame(main_panes, padx=10, pady=10)
-        main_panes.add(left_pane, width=300)
+        main_panes.add(left_pane, width=480) 
 
-        self.char_listbox = self.create_resource_catalog(left_pane, "Characters", "characters")
-        self.loc_listbox = self.create_resource_catalog(left_pane, "Locations", "locations")
-        self.prop_listbox = self.create_resource_catalog(left_pane, "Props", "props")
+        resource_grid_frame = tk.Frame(left_pane)
+        resource_grid_frame.pack(fill="both", expand=True)
+
+        # Column 1 Frame
+        col1_frame = tk.Frame(resource_grid_frame)
+        col1_frame.pack(side="left", fill="y", expand=True, padx=(0, 10))
+
+        # Column 2 Frame
+        col2_frame = tk.Frame(resource_grid_frame)
+        col2_frame.pack(side="left", fill="y", expand=True)
+
+        # Instantiate Listboxes in a 2x2 grid structure
+        self.char_listbox = self.create_resource_catalog(col1_frame, "Characters", "characters")
+        self.clothing_listbox = self.create_resource_catalog(col1_frame, "Clothing", "clothing")
+        self.loc_listbox = self.create_resource_catalog(col2_frame, "Locations", "locations")
+        self.prop_listbox = self.create_resource_catalog(col2_frame, "Props", "props")
         
         # Right pane: Preview and Remix
         right_pane = tk.Frame(main_panes, padx=10, pady=10)
@@ -205,7 +326,7 @@ class NarrativeGuruApp:
 
         # Preview Window
         tk.Label(right_pane, text="Preview Window", font=("Helvetica", 12)).pack(anchor="w")
-        self.preview_text = tk.Text(right_pane, wrap="word", height=15)
+        self.preview_text = tk.Text(right_pane, wrap="word", height=20) 
         self.preview_text.pack(fill="x", pady=5)
         preview_button_frame = tk.Frame(right_pane)
         preview_button_frame.pack(fill="x")
@@ -214,7 +335,7 @@ class NarrativeGuruApp:
         
         # Remix Station
         tk.Label(right_pane, text="Remix Station", font=("Helvetica", 12)).pack(anchor="w", pady=(20, 0))
-        self.remix_text = tk.Text(right_pane, wrap="word", height=15)
+        self.remix_text = tk.Text(right_pane, wrap="word", height=15) 
         self.remix_text.pack(fill="x", pady=5)
         remix_button_frame = tk.Frame(right_pane)
         remix_button_frame.pack(fill="x")
@@ -222,7 +343,6 @@ class NarrativeGuruApp:
         tk.Button(remix_button_frame, text="Clear Context", command=lambda: self.remix_text.delete("1.0", tk.END)).pack(side="left", padx=5)
         tk.Button(remix_button_frame, text="Export to File", command=self.export_remix_to_file).pack(side="right")
 
-        # Refresh the resource lists on screen load
         self.populate_resource_lists()
 
     def create_resource_catalog(self, parent, label_text, type_name):
@@ -232,7 +352,7 @@ class NarrativeGuruApp:
 
         tk.Label(frame, text=label_text, font=("Helvetica", 12)).pack(anchor="w")
         
-        listbox = tk.Listbox(frame, width=40, height=8, borderwidth=1, relief="sunken")
+        listbox = tk.Listbox(frame, width=25, height=13, borderwidth=1, relief="sunken") 
         listbox.pack(pady=5, fill="both", expand=True)
         
         # Bind events for the listbox
@@ -245,9 +365,10 @@ class NarrativeGuruApp:
         return listbox
 
     def populate_resource_lists(self):
-        """Fills all three resource listboxes with available resources."""
+        """Fills all resource listboxes with available resources."""
         self.populate_listbox(self.char_listbox, "characters")
         self.populate_listbox(self.loc_listbox, "locations")
+        self.populate_listbox(self.clothing_listbox, "clothing")
         self.populate_listbox(self.prop_listbox, "props")
     
     def populate_listbox(self, listbox, resource_type):
@@ -297,23 +418,45 @@ class NarrativeGuruApp:
                 messagebox.showerror("Error", f"Failed to load resource for remix: {e}")
 
     def show_resource_context_menu(self, event, resource_type):
-        """Displays a right-click context menu for deleting a resource."""
+        """Displays a right-click context menu for renaming and deleting a resource."""
         listbox = event.widget
+        
+        try:
+            # Get the index of the item that was right-clicked
+            index = listbox.nearest(event.y)
+            # Select the item under the cursor
+            listbox.selection_clear(0, tk.END)
+            listbox.selection_set(index)
+            listbox.activate(index)
+        except tk.TclError:
+            return
+
         if listbox.curselection():
-            index = listbox.curselection()[0]
-            resource_to_delete = listbox.get(index)
+            resource_to_act_on = listbox.get(index)
             
             context_menu = tk.Menu(self.root, tearoff=0)
-            context_menu.add_command(label="Delete", command=lambda: self.delete_resource(resource_to_delete, resource_type))
+            # NEW: Add rename option
+            context_menu.add_command(label="Rename", 
+                                      command=lambda: self.show_rename_modal(resource_to_act_on, "resource", resource_type))
+            context_menu.add_command(label="Delete", 
+                                      command=lambda: self.delete_resource(resource_to_act_on, resource_type))
             context_menu.post(event.x_root, event.y_root)
             
     def delete_resource(self, resource_name, resource_type):
         """Deletes a resource file after confirmation."""
-        if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete the {resource_type.rstrip('s')} '{resource_name}'?"):
+        singular_type = "piece of clothing" if resource_type == "clothing" else resource_type.rstrip('s')
+        
+        if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete the {singular_type} '{resource_name}'?"):
             file_path = os.path.join(self.project_path, self.current_project, resource_type, f"{resource_name}.json")
             try:
                 os.remove(file_path)
-                messagebox.showinfo("Success", f"{resource_type.rstrip('s').capitalize()} '{resource_name}' deleted.")
+                
+                # Clear preview/selection if the selected resource was deleted
+                if hasattr(self, 'selected_resource_path') and self.selected_resource_path == file_path:
+                    del self.selected_resource_path
+                    self.preview_text.delete("1.0", tk.END)
+                    
+                messagebox.showinfo("Success", f"{singular_type.capitalize()} '{resource_name}' deleted.")
                 self.populate_resource_lists()
             except OSError as e:
                 messagebox.showerror("Error", f"Failed to delete resource: {e}")
@@ -364,13 +507,15 @@ class NarrativeGuruApp:
     def show_new_resource_window(self, resource_type):
         """Displays a popup for creating a new resource (character, location, or prop)."""
         self.new_resource_window = tk.Toplevel(self.root)
-        self.new_resource_window.title(f"New {resource_type.capitalize().rstrip('s')}")
+        
+        singular_type = "piece of clothing" if resource_type == "clothing" else resource_type.rstrip('s')
+        self.new_resource_window.title(f"New {singular_type.capitalize()}")
         self.new_resource_window.grab_set()
 
         frame = tk.Frame(self.new_resource_window, padx=20, pady=20)
         frame.pack()
 
-        tk.Label(frame, text=f"New {resource_type.capitalize().rstrip('s')} Name:").pack(pady=5)
+        tk.Label(frame, text=f"New {singular_type.capitalize()} Name:").pack(pady=5)
         self.new_resource_name_entry = tk.Entry(frame, width=30)
         self.new_resource_name_entry.pack(pady=5)
         
@@ -395,14 +540,16 @@ class NarrativeGuruApp:
             return
 
         file_path = os.path.join(self.project_path, self.current_project, resource_type, f"{resource_name}.json")
+        singular_type = "piece of clothing" if resource_type == "clothing" else resource_type.rstrip('s')
+
         if os.path.exists(file_path):
-            messagebox.showerror("Error", f"A {resource_type.rstrip('s')} with that name already exists.")
+            messagebox.showerror("Error", f"A {singular_type} with that name already exists.")
             return
 
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump({"content": resource_content}, f, indent=4)
-            messagebox.showinfo("Success", f"{resource_type.capitalize().rstrip('s')} created successfully.")
+            messagebox.showinfo("Success", f"{singular_type.capitalize()} created successfully.")
             self.new_resource_window.destroy()
             self.populate_resource_lists()
         except IOError as e:
